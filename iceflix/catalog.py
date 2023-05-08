@@ -5,9 +5,9 @@ import Ice
 import IceStorm
 
 Ice.loadSlice("iceflix.ice")
-import Iceflix
+import IceFlix
 
-DATA_JSON = "data/data.json"
+DATA_JSON = "../data/data.json"
 
 
 class Persistence:
@@ -26,7 +26,7 @@ class Persistence:
         except:
             logging.error("Error al escribir el fichero json")
 
-class MediaCatalog(Iceflix.MediaCatalog):
+class MediaCatalog(IceFlix.MediaCatalog):
 
     def __init__(self, auth_service):
         self.auth_service = auth_service
@@ -37,20 +37,19 @@ class MediaCatalog(Iceflix.MediaCatalog):
         try:
             user = self.auth_service.whois(userToken)
         except:
-            raise Iceflix.Unauthorized()
+            raise IceFlix.Unauthorized()
         
-        media=Iceflix.Media()
-        info=Iceflix.MediaInfo()
+        media=IceFlix.Media()
+        info=IceFlix.MediaInfo()
         persistence=Persistence()
         media_catalog = persistence.read_json()
 
         for file in media_catalog.get("Media"):
             if file.get("MediaId") == mediaId:
-                media.mediaId=mediaId
+                media.mediaId=str(mediaId)
                 info.name=file.get("Name")
-                for tags in media_catalog.get("Tags"):
-                    info.tags=tags
-                media.info=info
+                info.tags=file.get("UserInfo").get("Tags")
+        media.info=info
         return media
 
 
@@ -75,21 +74,30 @@ class MediaCatalog(Iceflix.MediaCatalog):
         try:
             user = self.auth_service.whois(userToken)
         except:
-            raise Iceflix.Unauthorized()
-        
+            raise IceFlix.Unauthorized()
         list_files=[]
+        for i in range(len(tags)):
+            tags[i] = tags[i].lower()
+        tagsarray=[]
         persistence=Persistence()
         media_catalog = persistence.read_json()
         for file in media_catalog.get("Media"):
-            for tag in tags:
+            userinfo=file.get("UserInfo")
+            if userinfo.get("UserName") == user:
                 if includeAllTags:
-                    for tag_file in file.get("Tags"):
-                        if tag == tag_file:
-                            list_files.append(file.get("Name"))
+                    for tag in userinfo.get("Tags"):
+                        tagsarray.append(tag.lower())
+
+                        for tagssearch in tags:
+                            if tagssearch in tagsarray:
+                                tags.remove(tagssearch)
+                    if len(tags)==0:
+                        list_files.append(file.get("Name"))
                 else:
-                    for tag_file in file.get("Tags"):
-                        if tag in tag_file:
-                            list_files.append(file.get("Name"))
+                    for tag in userinfo.get("Tags"):
+                        for tagssearch in tags:
+                            if tagssearch in tag:
+                                list_files.append(file.get("Name"))
         return list_files
         
     def newMedia(self, mediaId, provider, current=None):
@@ -129,7 +137,7 @@ class MediaCatalog(Iceflix.MediaCatalog):
         try:
             user = self.auth_service.whois(userToken)
         except:
-            raise Iceflix.Unauthorized()
+            raise IceFlix.Unauthorized()
         
         persistence=Persistence()
         media_catalog = persistence.read_json()
@@ -146,7 +154,7 @@ class MediaCatalog(Iceflix.MediaCatalog):
         try:
             user = self.auth_service.whois(userToken)
         except:
-            raise Iceflix.Unauthorized()
+            raise IceFlix.Unauthorized()
         
         persistence=Persistence()
         media_catalog = persistence.read_json()
@@ -157,3 +165,13 @@ class MediaCatalog(Iceflix.MediaCatalog):
                 persistence.write_json(media_catalog)
         return 0
     
+    
+
+
+if __name__ == '__main__':
+
+    #main para pruebas
+    i=0
+
+        
+
