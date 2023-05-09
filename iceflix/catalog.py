@@ -75,28 +75,29 @@ class MediaCatalog(IceFlix.MediaCatalog):
             user = self.auth_service.whois(userToken)
         except:
             raise IceFlix.Unauthorized()
+        
         list_files=[]
-        for i in range(len(tags)):
-            tags[i] = tags[i].lower()
-        tagsarray=[]
         persistence=Persistence()
         media_catalog = persistence.read_json()
         for file in media_catalog.get("Media"):
+            tagslower=[]
+            for i in range(len(tags)):
+                tagslower.append(tags[i].lower())
             userinfo=file.get("UserInfo")
             if userinfo.get("UserName") == user:
+                tagsarray=[]
                 if includeAllTags:
                     for tag in userinfo.get("Tags"):
                         tagsarray.append(tag.lower())
-
-                        for tagssearch in tags:
+                        for tagssearch in tagslower:
                             if tagssearch in tagsarray:
-                                tags.remove(tagssearch)
-                    if len(tags)==0:
+                                tagsarray.remove(tagssearch)
+                    if len(tagsarray)==0:
                         list_files.append(file.get("Name"))
                 else:
                     for tag in userinfo.get("Tags"):
-                        for tagssearch in tags:
-                            if tagssearch in tag:
+                        for tagssearch in tagslower:
+                            if tagssearch in tag.lower():
                                 list_files.append(file.get("Name"))
         return list_files
         
@@ -143,9 +144,11 @@ class MediaCatalog(IceFlix.MediaCatalog):
         media_catalog = persistence.read_json()
         for file in media_catalog.get("Media"):
             if file.get("MediaId") == mediaId:
-                for tag in tags:
-                    file["Tags"].append(tag)
-                persistence.write_json(media_catalog)
+                if user==file.get("UserInfo").get("UserName"):
+                    for tag in tags:
+                        if tag not in file["UserInfo"]["Tags"]:
+                            file["UserInfo"]["Tags"].append(tag)
+                    persistence.write_json(media_catalog)
         return 0
         
     def removeTags(self, mediaId, tags, userToken, current=None):
@@ -155,13 +158,13 @@ class MediaCatalog(IceFlix.MediaCatalog):
             user = self.auth_service.whois(userToken)
         except:
             raise IceFlix.Unauthorized()
-        
         persistence=Persistence()
         media_catalog = persistence.read_json()
         for file in media_catalog.get("Media"):
             if file.get("MediaId") == mediaId:
                 for tag in tags:
-                    file["Tags"].remove(tag)
+                    if tag in file["UserInfo"]["Tags"]:
+                        file["UserInfo"]["Tags"].remove(tag)
                 persistence.write_json(media_catalog)
         return 0
     
@@ -169,9 +172,14 @@ class MediaCatalog(IceFlix.MediaCatalog):
 
 
 if __name__ == '__main__':
+        
 
-    #main para pruebas
-    i=0
+        user="Javi"
+        mediaId=5
+        tags=["accion","Aventura","Ciencia Ficcion"]
+
+
+
 
         
 
