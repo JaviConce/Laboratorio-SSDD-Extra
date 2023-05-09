@@ -169,14 +169,43 @@ class MediaCatalog(IceFlix.MediaCatalog):
         return 0
     
     
+class Announcement(IceFlix.Annoucement):
+
+    def __init__(self):
+        self.main_ser={}
+        self.catalog_ser={}
+        self.auth_ser={}
+        self.file_ser={}
+    
+    def announce(self,service,serviceId,current=None):
+        if service.ice_isA("::IceFlix::Main"):
+            logging.log(f'[Announcement] announce Main: {serviceId}')
+            if not serviceId in self.main_ser:
+                self.main_ser[serviceId]=IceFlix.MainPrx.uncheckedCast(service)
+
+        elif service.ice_isA("::IceFlix::MediaCatalog"):
+            logging.log(f'[Announcement] announce Catalog: {serviceId}')
+            if not serviceId in self.catalog_ser:
+                self.catalog_ser[serviceId]=IceFlix.MediaCatalogPrx.uncheckedCast(service)
+                
+        elif service.ice_isA("::IceFlix::Authenticator"):
+            logging.log(f'[Announcement] announce Authenticator: {serviceId}')
+            if not serviceId in self.auth_ser:
+                self.auth_ser[serviceId]=IceFlix.AuthenticatorPrx.uncheckedCast(service)
+
+        elif service.ice_isA("::IceFlix::FileService"):
+            logging.log(f'[Announcement] announce File: {serviceId}')
+            if not serviceId in self.file_ser:
+                self.file_ser[serviceId]=IceFlix.FileServicePrx.uncheckedCast(service)
+        
+
 
 
 if __name__ == '__main__':
-        
 
-        user="Javi"
-        mediaId=5
-        tags=["accion","Aventura","Ciencia Ficcion"]
+    user="Javi"
+    mediaId=5
+    tags=["accion","Aventura","Ciencia Ficcion"]
 
 
 

@@ -1,46 +1,35 @@
 {
-    "Media": [
-        {
-            "MediaId": 1,
-            "Name": "El Padrino",
-            "Tags": [
-                "Accion",
-                "Drama"
-            ]
-        },
-        {
-            "MediaId": 2,
-            "Name": "El Señor de los Anillos: La Comunidad del Anillo",
-            "Tags": [
-                "Accion",
-                "Aventura",
-                "Ciencia ficcion"
-            ]
-        },
-        {
-            "MediaId": 3,
-            "Name": "La Guerra de las Galaxias: Episodio IV - Una Nueva Esperanza",
-            "Tags": [
-                "Accion",
-                "Aventura",
-                "Ciencia ficcion"
-            ]
-        },
-        {
-            "MediaId": 4,
-            "Name": "Regreso al Futuro",
-            "Tags": [
-                "Aventura",
-                "Futurista"
-            ]
-        },
-        {
-            "MediaId": 5,
-            "Name": "Forrest Gump",
-            "Tags": [
-                "Comedia",
-                "aventura"
-            ]
-        }
-    ]
+  "Media": [
+    {
+      "MediaId": 1,
+      "Name": "El Padrino",
+      "UserInfo": { "Tags": ["Accion", "Ciencia ficcion"], "UserName": "Juan" }
+    },
+    {
+      "MediaId": 2,
+      "Name": "El Se\u00f1or de los Anillos: La Comunidad del Anillo",
+      "UserInfo": { "Tags": ["Ciencia ficcion"], "UserName": "Hector" }
+    },
+    {
+      "MediaId": 3,
+      "Name": "La Guerra de las Galaxias: Episodio IV - Una Nueva Esperanza",
+      "UserInfo": {
+        "Tags": ["Accion", "Aventura", "Ciencia ficcion"],
+        "UserName": "Isma"
+      }
+    },
+    {
+      "MediaId": 4,
+      "Name": "Regreso al Futuro",
+      "UserInfo": { "Tags": ["Aventura"], "UserName": "Isma" }
+    },
+    {
+      "MediaId": 5,
+      "Name": "Forest Gump",
+      "UserInfo": {
+        "Tags": ["Accion", "Aventura", "Ciencia Ficcion"],
+        "UserName": "Javi"
+      }
+    }
+  ]
 }
