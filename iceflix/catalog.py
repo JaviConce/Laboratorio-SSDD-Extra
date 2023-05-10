@@ -28,9 +28,19 @@ class Persistence:
 
 class MediaCatalog(IceFlix.MediaCatalog):
 
-    def __init__(self, auth_service):
+    def __init__(self, auth_service,announcement, catalog_up_pub):
         self.auth_service = auth_service
+        self.data_media={}
+        self.announcement=announcement
+        self.publiser=catalog_up_pub
 
+        self.service_id=""
+        self.persistence=Persistence()
+
+
+    def recargar(self):
+        self.data_media=self.persistence.read_json()
+        
     def getTile(self, mediaId, userToken, current=None):
 
         user=""
@@ -41,10 +51,10 @@ class MediaCatalog(IceFlix.MediaCatalog):
         
         media=IceFlix.Media()
         info=IceFlix.MediaInfo()
-        persistence=Persistence()
-        media_catalog = persistence.read_json()
 
-        for file in media_catalog.get("Media"):
+        self.data_media = self.persistence.read_json()
+
+        for file in self.data_media.get("Media"):
             if file.get("MediaId") == mediaId:
                 media.mediaId=str(mediaId)
                 info.name=file.get("Name")
@@ -56,10 +66,9 @@ class MediaCatalog(IceFlix.MediaCatalog):
     def getTilesByName(self, name, exact, current=None):
         
         list_files=[]
-        persistence=Persistence()
-        media_catalog = persistence.read_json()
+        self.data_media = self.persistence.read_json()
 
-        for file in media_catalog.get("Media"):
+        for file in self.data_media.get("Media"):
             if(exact):
                 if file.get("Name") == name:
                     list_files.append(file.get("Name"))
@@ -77,9 +86,8 @@ class MediaCatalog(IceFlix.MediaCatalog):
             raise IceFlix.Unauthorized()
         
         list_files=[]
-        persistence=Persistence()
-        media_catalog = persistence.read_json()
-        for file in media_catalog.get("Media"):
+        self.data_media = self.persistence.read_json()
+        for file in self.data_media.get("Media"):
             tagslower=[]
             for i in range(len(tags)):
                 tagslower.append(tags[i].lower())
@@ -103,30 +111,28 @@ class MediaCatalog(IceFlix.MediaCatalog):
         
     def newMedia(self, mediaId, provider, current=None):
 
-        persistence=Persistence()
-        media_catalog = persistence.read_json()
+        self.data_media = self.persistence.read_json()
         new_media={"MediaId":mediaId,"Name":mediaId,"Tags":[]}
-        media_catalog["Media"].append(new_media)
-        persistence.write_json(media_catalog)
+        self.data_media["Media"].append(new_media)
+        self.persistence.write_json(self.data_media)
         return 0
         
     def removeMedia(self, mediaId, provider, current=None):
-        persistence=Persistence()
-        media_catalog = persistence.read_json()
-        for file in media_catalog.get("Media"):
+        self.data_media = self.persistence.read_json()
+        for file in self.data_media.get("Media"):
             if file.get("MediaId") == mediaId:
-                media_catalog["Media"].remove(file)
-                persistence.write_json(media_catalog)
+                self.data_media["Media"].remove(file)
+                self.persistence.write_json(self.data_media)
         return 0
     def renameTile(self, mediaId, name, adminToken, current=None):
 
         if self.auth_service.isAdmin(adminToken):
             persistence=Persistence()
-            media_catalog = persistence.read_json()
-            for file in media_catalog.get("Media"):
+            self.data_media = persistence.read_json()
+            for file in self.data_media.get("Media"):
                 if file.get("MediaId") == mediaId:
                     file["Name"]=name
-                    persistence.write_json(media_catalog)
+                    persistence.write_json(self.data_media)
         else:
             logging.info("Admin token incorrecto")
         
@@ -140,15 +146,15 @@ class MediaCatalog(IceFlix.MediaCatalog):
         except:
             raise IceFlix.Unauthorized()
         
-        persistence=Persistence()
-        media_catalog = persistence.read_json()
-        for file in media_catalog.get("Media"):
+        
+        self.data_media = self.persistence.read_json()
+        for file in self.data_media.get("Media"):
             if file.get("MediaId") == mediaId:
                 if user==file.get("UserInfo").get("UserName"):
                     for tag in tags:
                         if tag not in file["UserInfo"]["Tags"]:
                             file["UserInfo"]["Tags"].append(tag)
-                    persistence.write_json(media_catalog)
+                    self.persistence.write_json(self.data_media)
         return 0
         
     def removeTags(self, mediaId, tags, userToken, current=None):
@@ -158,32 +164,25 @@ class MediaCatalog(IceFlix.MediaCatalog):
             user = self.auth_service.whois(userToken)
         except:
             raise IceFlix.Unauthorized()
-        persistence=Persistence()
-        media_catalog = persistence.read_json()
-        for file in media_catalog.get("Media"):
+        self.data_media = self.persistence.read_json()
+        for file in self.data_media.get("Media"):
             if file.get("MediaId") == mediaId:
                 for tag in tags:
                     if tag in file["UserInfo"]["Tags"]:
                         file["UserInfo"]["Tags"].remove(tag)
-                persistence.write_json(media_catalog)
+                self.persistence.write_json(self.data_media)
         return 0
     
-    
+        
 class Announcement(IceFlix.Annoucement):
 
     def __init__(self):
-        self.main_ser={}
         self.catalog_ser={}
         self.auth_ser={}
         self.file_ser={}
     
     def announce(self,service,serviceId,current=None):
-        if service.ice_isA("::IceFlix::Main"):
-            logging.log(f'[Announcement] announce Main: {serviceId}')
-            if not serviceId in self.main_ser:
-                self.main_ser[serviceId]=IceFlix.MainPrx.uncheckedCast(service)
-
-        elif service.ice_isA("::IceFlix::MediaCatalog"):
+        if service.ice_isA("::IceFlix::MediaCatalog"):
             logging.log(f'[Announcement] announce Catalog: {serviceId}')
             if not serviceId in self.catalog_ser:
                 self.catalog_ser[serviceId]=IceFlix.MediaCatalogPrx.uncheckedCast(service)
@@ -198,7 +197,36 @@ class Announcement(IceFlix.Annoucement):
             if not serviceId in self.file_ser:
                 self.file_ser[serviceId]=IceFlix.FileServicePrx.uncheckedCast(service)
         
+class CatalogUpdate():
+    def __init__(self,announcement,catalog,service_Id):
+        self.service_ID=service_Id
+        self.catalogo=catalog
+        self.announce=announcement
+        self.persistencia=Persistence()
 
+    def renameTile(self, mediaId,  newName,  serviceId,current=None):
+        if serviceId != self.service_ID:
+            print("[Catalog Update] Actualizando titulo con id {} y nombre {}",mediaId,newName)
+            if serviceId in self.announce.catalog_ser:
+                files=self.persistencia.read_json()
+                self.catalogo.data_media=files
+            else:
+                print("[Catalog Update] El servicio no esta registrado")
+            
+
+    def addTags(self, mediaId, user, tags, serviceId,current=None):
+        if serviceId != self.service_ID:
+            print("[Catalog Update] Actualizando tags con id {}, usuario {} y tags {}",mediaId,user,tags)
+            if serviceId in self.announce.catalog_ser:
+                files=self.persistencia.read_json()
+                self.catalogo.data_media=files
+
+    def removeTags(self, mediaId,  user,  tags,  serviceId,current=None):
+        if serviceId != self.service_ID:
+            print("[Catalog Update] Eliminando tags con id {} usuario {} y tags {}",mediaId,user,tags)
+            if serviceId in self.announce.catalog_ser:
+                files=self.persistencia.read_json()
+                self.catalogo.data_media=files
 
 
 if __name__ == '__main__':
