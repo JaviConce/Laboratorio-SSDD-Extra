@@ -28,8 +28,7 @@ class Persistence:
 
 class MediaCatalog(IceFlix.MediaCatalog):
 
-    def __init__(self, auth_service,announcement, catalog_up_pub):
-        self.auth_service = auth_service
+    def __init__(self,announcement, catalog_up_pub):
         self.data_media={}
         self.announcement=announcement
         self.publiser=catalog_up_pub
@@ -253,6 +252,52 @@ class CatalogUpdate():
             if serviceId in self.announce.catalog_ser:
                 files=self.persistencia.read_json()
                 self.catalogo.data_media=files
+
+
+class Servidor(Ice.Application):
+    def get_topic_manager(self,broker):
+        key = 'IceStorm.TopicManager.Proxy'
+        proxy = broker.propertyToProxy(key)
+        if proxy is None:
+            print("property {} not set".format(key))
+            return None
+
+        print("Using IceStorm in: '%s'" % key)
+        return IceStorm.TopicManagerPrx.checkedCast(proxy)
+
+    def get_topic(self,topic_mgr,topic_name):
+        topic=""
+        try:
+            topic=topic_mgr.retrieve(topic_name)
+        except IceStorm.NoSuchTopic:
+            print("Topic no valido\n")
+
+    def run(self,argv):
+        broker=self.communicator()
+        
+        adapter=broker.createObjectAdapter("CatalogAdapter")
+        adapter.activate()
+
+        topic_mqr=self.get_topic_manager(broker)
+        if not topic_mqr:
+            print("Invalid proxy\n")
+            return 2
+        
+        announce_top=self.get_topic(topic_mqr,"Announcements")
+        file_top=self.get_topic(topic_mqr,"FileAvailabilityAnnounces")
+        catalog_top=self.get_topic(topic_mqr,"CatalogUpdates")
+
+        if not announce_top and not file_top and not catalog_top:
+            return 2
+        
+        announce_top=Announcement()
+        publisher=catalog_top.getPublisher()
+        catalog_pub=IceFlix.CatalogUpdate.uncheckedCast(publisher)
+
+        servant=MediaCatalog(announce_top,catalog_pub)
+        proxyCatalog=adapter.addWithUUID(servant)
+        print("Iniciando catalogo\n")
+
 
 
 if __name__ == '__main__':
