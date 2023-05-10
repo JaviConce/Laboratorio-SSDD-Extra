@@ -34,13 +34,23 @@ class MediaCatalog(IceFlix.MediaCatalog):
         self.announcement=announcement
         self.publiser=catalog_up_pub
 
+        self.providers={}
         self.service_id=""
         self.persistence=Persistence()
 
 
     def recargar(self):
         self.data_media=self.persistence.read_json()
+    
+    def providers_up(self,mediaId,ser,current=None):
+        self.providers={}
+        for id in self.data_media.get("MediaId"):
+            if id== mediaId:
+                self.providers[mediaId]=ser
+            
         
+    
+
     def getTile(self, mediaId, userToken, current=None):
 
         user=""
@@ -196,6 +206,22 @@ class Announcement(IceFlix.Annoucement):
             logging.log(f'[Announcement] announce File: {serviceId}')
             if not serviceId in self.file_ser:
                 self.file_ser[serviceId]=IceFlix.FileServicePrx.uncheckedCast(service)
+
+class FileAvailabilityAnnounce(IceFlix.FileAvailabilityAnnounce):
+
+    def __init__(self,annoucement,catalog):
+        self.announce=annoucement
+        self.catalogo=catalog
+
+    def announce(self,mediaId,serviceId,current=None):
+        if serviceId in self.announce.file_ser:
+            print("[FileAvailability] Id servicio {} Id media {}",serviceId,mediaId)
+            services=self.announce.file_ser[mediaId]
+            self.catalogo.providers_up(mediaId,services)
+
+
+
+    
         
 class CatalogUpdate():
     def __init__(self,announcement,catalog,service_Id):
