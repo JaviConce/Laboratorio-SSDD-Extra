@@ -3,6 +3,8 @@ import json
 import logging
 import Ice
 import IceStorm
+import random
+import uuid
 
 Ice.loadSlice("iceflix.ice")
 import IceFlix
@@ -36,6 +38,7 @@ class MediaCatalog(IceFlix.MediaCatalog):
         self.providers={}
         self.service_id=""
         self.persistence=Persistence()
+        self.auth=random.choice(announcement.auth_ser)
 
 
     def recargar(self):
@@ -44,7 +47,7 @@ class MediaCatalog(IceFlix.MediaCatalog):
     def providers_up(self,mediaId,ser,current=None):
         self.providers={}
         for id in self.data_media.get("MediaId"):
-            if id== mediaId:
+            if id==mediaId:
                 self.providers[mediaId]=ser
             
         
@@ -54,7 +57,7 @@ class MediaCatalog(IceFlix.MediaCatalog):
 
         user=""
         try:
-            user = self.auth_service.whois(userToken)
+            user = self.auth.whois(userToken)
         except:
             raise IceFlix.Unauthorized()
         
@@ -90,7 +93,7 @@ class MediaCatalog(IceFlix.MediaCatalog):
 
         user=""
         try:
-            user = self.auth_service.whois(userToken)
+            user = self.auth.whois(userToken)
         except:
             raise IceFlix.Unauthorized()
         
@@ -118,24 +121,9 @@ class MediaCatalog(IceFlix.MediaCatalog):
                                 list_files.append(file.get("Name"))
         return list_files
         
-    def newMedia(self, mediaId, provider, current=None):
-
-        self.data_media = self.persistence.read_json()
-        new_media={"MediaId":mediaId,"Name":mediaId,"Tags":[]}
-        self.data_media["Media"].append(new_media)
-        self.persistence.write_json(self.data_media)
-        return 0
-        
-    def removeMedia(self, mediaId, provider, current=None):
-        self.data_media = self.persistence.read_json()
-        for file in self.data_media.get("Media"):
-            if file.get("MediaId") == mediaId:
-                self.data_media["Media"].remove(file)
-                self.persistence.write_json(self.data_media)
-        return 0
     def renameTile(self, mediaId, name, adminToken, current=None):
 
-        if self.auth_service.isAdmin(adminToken):
+        if self.auth.isAdmin(adminToken):
             persistence=Persistence()
             self.data_media = persistence.read_json()
             for file in self.data_media.get("Media"):
@@ -151,7 +139,7 @@ class MediaCatalog(IceFlix.MediaCatalog):
 
         user=""
         try:
-            user = self.auth_service.whois(userToken)
+            user = self.auth.whois(userToken)
         except:
             raise IceFlix.Unauthorized()
         
@@ -170,7 +158,7 @@ class MediaCatalog(IceFlix.MediaCatalog):
         
         user=""
         try:
-            user = self.auth_service.whois(userToken)
+            user = self.auth.whois(userToken)
         except:
             raise IceFlix.Unauthorized()
         self.data_media = self.persistence.read_json()
@@ -182,6 +170,18 @@ class MediaCatalog(IceFlix.MediaCatalog):
                 self.persistence.write_json(self.data_media)
         return 0
     
+    def getAllDeltas(self,current=None):
+        print("Actualizando publicador con los datos en local")
+        self.data_media=self.persistence.read_json()
+        for file in self.data_media.get("Media"):
+            mediaId=file.get("MediaId")
+            nombre=file.get("Name")
+            self.publiser.renameTitle(mediaId,tags,nombre,self.service_id)
+        for file in self.data_media.get("Media"):
+            mediaId=file.get("MediaId")
+            user=file.get("UserInfo").get("UserName")
+            tags=file.get("UserInfo").get("Tags")
+            self.publiser.addTags(mediaId,user,tags,self.service_id)
         
 class Announcement(IceFlix.Annoucement):
 
@@ -212,25 +212,26 @@ class FileAvailabilityAnnounce(IceFlix.FileAvailabilityAnnounce):
         self.announce=annoucement
         self.catalogo=catalog
 
-    def announce(self,mediaId,serviceId,current=None):
+    def announce(self,mediaIds,serviceId,current=None):
         if serviceId in self.announce.file_ser:
-            print("[FileAvailability] Id servicio {} Id media {}",serviceId,mediaId)
-            services=self.announce.file_ser[mediaId]
-            self.catalogo.providers_up(mediaId,services)
+            for mediaId in mediaIds:
+                print("[FileAvailability] Id servicio {} Id media {}",serviceId,mediaId)
+                services=self.announce.file_ser[mediaId]
+                self.catalogo.providers_up(mediaId,services)
 
 
 
     
         
-class CatalogUpdate():
-    def __init__(self,announcement,catalog,service_Id):
-        self.service_ID=service_Id
+class CatalogUpdate(IceFlix.CatalogUpdate):
+    def __init__(self,announcement,catalog):
+
         self.catalogo=catalog
         self.announce=announcement
         self.persistencia=Persistence()
 
     def renameTile(self, mediaId,  newName,  serviceId,current=None):
-        if serviceId != self.service_ID:
+        if serviceId != self.catalogo.service_id:
             print("[Catalog Update] Actualizando titulo con id {} y nombre {}",mediaId,newName)
             if serviceId in self.announce.catalog_ser:
                 files=self.persistencia.read_json()
@@ -240,14 +241,14 @@ class CatalogUpdate():
             
 
     def addTags(self, mediaId, user, tags, serviceId,current=None):
-        if serviceId != self.service_ID:
+        if serviceId != self.catalogo.service_id:
             print("[Catalog Update] Actualizando tags con id {}, usuario {} y tags {}",mediaId,user,tags)
             if serviceId in self.announce.catalog_ser:
                 files=self.persistencia.read_json()
                 self.catalogo.data_media=files
 
     def removeTags(self, mediaId,  user,  tags,  serviceId,current=None):
-        if serviceId != self.service_ID:
+        if serviceId != self.catalogo.service_id:
             print("[Catalog Update] Eliminando tags con id {} usuario {} y tags {}",mediaId,user,tags)
             if serviceId in self.announce.catalog_ser:
                 files=self.persistencia.read_json()
@@ -290,14 +291,27 @@ class Servidor(Ice.Application):
         if not announce_top and not file_top and not catalog_top:
             return 2
         
-        announce_top=Announcement()
+        announce_ser=Announcement()
         publisher=catalog_top.getPublisher()
         catalog_pub=IceFlix.CatalogUpdate.uncheckedCast(publisher)
 
         servant=MediaCatalog(announce_top,catalog_pub)
         proxyCatalog=adapter.addWithUUID(servant)
+        servant.service_id= proxyCatalog.ice_getIdentity().name
         print("Iniciando catalogo\n")
 
+        catalog_up_servant=CatalogUpdate(announce_ser,servant)
+        proxyCatalogUp=adapter.addWithUUID(catalog_up_servant)
+        catalog_top.subscribeAndGetPublisher({},proxyCatalogUp)
+
+        anno_pub= IceFlix.AnnouncementPrx.uncheckedCast(announce_top.getPublisher())
+        print("Iniciando Announcement")
+        anno_pub.announce(proxyCatalog,servant.service_id)
+
+        proxyAnnounce=adapter.addWithUUID(announce_ser)
+        announce_top.subscribeAndGetPublisher({},proxyAnnounce)
+
+        print("Buscando anunciamientos\n")
 
 
 if __name__ == '__main__':
