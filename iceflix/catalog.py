@@ -1,11 +1,12 @@
 
 import json
 import logging
+import sys
+import random
+import time
+import threading
 import Ice
 import IceStorm
-import random
-import uuid
-
 Ice.loadSlice("iceflix.ice")
 import IceFlix
 
@@ -39,22 +40,15 @@ class MediaCatalog(IceFlix.MediaCatalog):
         self.service_id=""
         self.persistence=Persistence()
         self.auth=random.choice(announcement.auth_ser)
-
-
     def recargar(self):
         self.data_media=self.persistence.read_json()
-    
     def providers_up(self,mediaId,ser,current=None):
         self.providers={}
         for id in self.data_media.get("MediaId"):
             if id==mediaId:
                 self.providers[mediaId]=ser
-            
-        
-    
-
     def getTile(self, mediaId, userToken, current=None):
-
+        found=False
         user=""
         try:
             user = self.auth.whois(userToken)
@@ -63,23 +57,22 @@ class MediaCatalog(IceFlix.MediaCatalog):
         
         media=IceFlix.Media()
         info=IceFlix.MediaInfo()
-
         self.data_media = self.persistence.read_json()
-
         for file in self.data_media.get("Media"):
             if file.get("MediaId") == mediaId:
+                found=True
                 media.mediaId=str(mediaId)
                 info.name=file.get("Name")
                 info.tags=file.get("UserInfo").get("Tags")
         media.info=info
+        if not found:
+            raise IceFlix.WrongMediaId()
         return media
-
-
+    
     def getTilesByName(self, name, exact, current=None):
         
         list_files=[]
         self.data_media = self.persistence.read_json()
-
         for file in self.data_media.get("Media"):
             if(exact):
                 if file.get("Name") == name:
@@ -96,7 +89,6 @@ class MediaCatalog(IceFlix.MediaCatalog):
             user = self.auth.whois(userToken)
         except:
             raise IceFlix.Unauthorized()
-        
         list_files=[]
         self.data_media = self.persistence.read_json()
         for file in self.data_media.get("Media"):
@@ -122,40 +114,45 @@ class MediaCatalog(IceFlix.MediaCatalog):
         return list_files
         
     def renameTile(self, mediaId, name, adminToken, current=None):
-
+        found=False
         if self.auth.isAdmin(adminToken):
             persistence=Persistence()
             self.data_media = persistence.read_json()
             for file in self.data_media.get("Media"):
                 if file.get("MediaId") == mediaId:
+                    found=True
                     file["Name"]=name
                     persistence.write_json(self.data_media)
         else:
-            logging.info("Admin token incorrecto")
-        
+            print("Admin token incorrecto\n")
+            raise IceFlix.Unauthorized()
+        if not found:
+            print("Media no encontrada")
+            raise IceFlix.WrongMediaId()
         return 0
 
     def addTags(self, mediaId, tags, userToken, current=None):
-
+        found=False
         user=""
         try:
             user = self.auth.whois(userToken)
         except:
             raise IceFlix.Unauthorized()
-        
-        
         self.data_media = self.persistence.read_json()
         for file in self.data_media.get("Media"):
             if file.get("MediaId") == mediaId:
+                found=True
                 if user==file.get("UserInfo").get("UserName"):
                     for tag in tags:
                         if tag not in file["UserInfo"]["Tags"]:
                             file["UserInfo"]["Tags"].append(tag)
                     self.persistence.write_json(self.data_media)
+        if not found:
+            raise IceFlix.WrongMediaId()
         return 0
         
     def removeTags(self, mediaId, tags, userToken, current=None):
-        
+        found=False
         user=""
         try:
             user = self.auth.whois(userToken)
@@ -164,10 +161,13 @@ class MediaCatalog(IceFlix.MediaCatalog):
         self.data_media = self.persistence.read_json()
         for file in self.data_media.get("Media"):
             if file.get("MediaId") == mediaId:
+                found=True
                 for tag in tags:
                     if tag in file["UserInfo"]["Tags"]:
                         file["UserInfo"]["Tags"].remove(tag)
                 self.persistence.write_json(self.data_media)
+        if not found:
+            raise IceFlix.WrongMediaId()
         return 0
     
     def getAllDeltas(self,current=None):
@@ -187,27 +187,29 @@ class Announcement(IceFlix.Annoucement):
 
     def __init__(self):
         self.catalog_ser={}
+        self.catalog_valid={}
         self.auth_ser={}
+        self.auth_valid={}
         self.file_ser={}
-    
+        self.file_valid={}
+
     def announce(self,service,serviceId,current=None):
         if service.ice_isA("::IceFlix::MediaCatalog"):
             logging.log(f'[Announcement] announce Catalog: {serviceId}')
             if not serviceId in self.catalog_ser:
                 self.catalog_ser[serviceId]=IceFlix.MediaCatalogPrx.uncheckedCast(service)
-                
+                self.catalog_valid[serviceId]=time.time()
         elif service.ice_isA("::IceFlix::Authenticator"):
             logging.log(f'[Announcement] announce Authenticator: {serviceId}')
             if not serviceId in self.auth_ser:
                 self.auth_ser[serviceId]=IceFlix.AuthenticatorPrx.uncheckedCast(service)
-
+                self.auth_valid[serviceId]=time.time()
         elif service.ice_isA("::IceFlix::FileService"):
             logging.log(f'[Announcement] announce File: {serviceId}')
             if not serviceId in self.file_ser:
                 self.file_ser[serviceId]=IceFlix.FileServicePrx.uncheckedCast(service)
-
+                self.file_valid[serviceId]=time.time()
 class FileAvailabilityAnnounce(IceFlix.FileAvailabilityAnnounce):
-
     def __init__(self,annoucement,catalog):
         self.announce=annoucement
         self.catalogo=catalog
@@ -218,11 +220,6 @@ class FileAvailabilityAnnounce(IceFlix.FileAvailabilityAnnounce):
                 print("[FileAvailability] Id servicio {} Id media {}",serviceId,mediaId)
                 services=self.announce.file_ser[mediaId]
                 self.catalogo.providers_up(mediaId,services)
-
-
-
-    
-        
 class CatalogUpdate(IceFlix.CatalogUpdate):
     def __init__(self,announcement,catalog):
 
@@ -238,7 +235,6 @@ class CatalogUpdate(IceFlix.CatalogUpdate):
                 self.catalogo.data_media=files
             else:
                 print("[Catalog Update] El servicio no esta registrado")
-            
 
     def addTags(self, mediaId, user, tags, serviceId,current=None):
         if serviceId != self.catalogo.service_id:
@@ -254,7 +250,6 @@ class CatalogUpdate(IceFlix.CatalogUpdate):
                 files=self.persistencia.read_json()
                 self.catalogo.data_media=files
 
-
 class Servidor(Ice.Application):
     def get_topic_manager(self,broker):
         key = 'IceStorm.TopicManager.Proxy'
@@ -262,7 +257,6 @@ class Servidor(Ice.Application):
         if proxy is None:
             print("property {} not set".format(key))
             return None
-
         print("Using IceStorm in: '%s'" % key)
         return IceStorm.TopicManagerPrx.checkedCast(proxy)
 
@@ -275,7 +269,6 @@ class Servidor(Ice.Application):
 
     def run(self,argv):
         broker=self.communicator()
-        
         adapter=broker.createObjectAdapter("CatalogAdapter")
         adapter.activate()
 
@@ -312,14 +305,65 @@ class Servidor(Ice.Application):
         announce_top.subscribeAndGetPublisher({},proxyAnnounce)
 
         print("Buscando anunciamientos\n")
+        time.sleep(10)
+
+        if announce_ser.catalog_ser==0 :
+            print("No hay anunciamientos de catalogo\n")
+            return 2
+        else:
+            print("Anunciamientos de catalogo encontrados\n")
+            random.choice(announce_ser.catalog_ser)
+
+        file_servant=FileAvailabilityAnnounce(announce_ser,servant)
+        ProxyFile=adapter.addWithUUID(file_servant)
+        file_top.subscribeAndGetPublisher({},ProxyFile)
+
+        thread_pub=threading.Thread(target=self.announce,args=(announce_ser,proxyCatalog,servant.service_id))
+        thread_ckc=threading.Thread(target=self.delete,args=(announce_ser))
+
+        thread_pub.start()
+        thread_ckc.start()
+
+        broker.waitForShutdown()
+
+        announce_top.unsubscribe(proxyAnnounce)
+        file_top.unsubscribe(ProxyFile)
+        catalog_top.unsubscribe(proxyCatalogUp)
 
 
+    def announce(announce_ser,proxyCatalog,servant_id):
+        while(1):
+            print("Publiacando anunciamientos\n")
+            announce_ser.announce(announce_ser,proxyCatalog,servant_id)
+            time.sleep(10)
+    def delete(announce_ser):
+        t=time.time()
+        while(1):
+            print("Eliminando anunciamientos de autenticador\n")
+            for auth in announce_ser.auth_ser.keys():
+                if t-announce_ser.auth_valid[auth]>12:
+                    del announce_ser.auth_ser[auth]
+                    del announce_ser.auth_valid[auth]
+                time.sleep(10)
+
+            print("Eliminando anunciamientos de catalogo\n")
+            for cat in announce_ser.catalog_ser.keys():
+                if t-announce_ser.catalog_valid[cat]>12:
+                    del announce_ser.catalog_ser[cat]
+                    del announce_ser.catalog_valid[cat]
+                time.sleep(10)
+
+
+            print("Eliminando anunciamientos de ficheros\n")
+            for fil in announce_ser.file_ser.keys():
+                if t-announce_ser.file_valid[fil]>12:
+                    del announce_ser.file_ser[fil]
+                    del announce_ser.file_valid[fil]
+                time.sleep(10)
 if __name__ == '__main__':
 
-    user="Javi"
-    mediaId=5
-    tags=["accion","Aventura","Ciencia Ficcion"]
-
+    server=Servidor()
+    sys.exit(server.main(sys.argv))
 
 
 
