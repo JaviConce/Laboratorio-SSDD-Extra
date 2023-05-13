@@ -1,4 +1,23 @@
-# Template project for ssdd-lab
+# Catalogo Extra
+
+## Inicio de servicios
+
+  1. Para inciar los servicios deben ejecutar *./run_icestorm* para crear los topics a los que nos subscribirmos mas adelante
+  2. Iniciaremos el catalogo utilizando *./run_service* 
+
+
+## Estructura de JSON
+
+ "Media": [
+    {
+      "MediaId": Int,
+      "Name": "String",
+      "UserInfo": {
+        "Tags": ["String",
+        "UserName": "String"
+      }
+    }
+
 
 This repository is a Python project template.
 It contains the following files and directories:
@@ -25,3 +44,5 @@ It contains the following files and directories:
 - `setup.cfg` is a Python distribution configuration file for Setuptools.
   It needs to be modified in order to adeccuate to the package name and
   console handler functions.
+
+
